@@ -13,6 +13,19 @@ SEEN_POSTS_FILE = "seen_posts.json"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
+# Nur benachrichtigen wenn Titel eines dieser Wörter enthält (Verkauf)
+SELL_KEYWORDS = [
+    "verkaufe", "verkauf", "vk", "abzugeben", "abgabe",
+    "biete", "gebe ab", "zu verkaufen", "ticket ab",
+    "spare ticket", "spare", "übrig", "übrige",
+]
+
+# Nie benachrichtigen wenn Titel eines dieser Wörter enthält (Gesuche)
+BUY_KEYWORDS = [
+    "suche", "gesucht", "wtb", "kaufe", "kaufen",
+    "brauche", "benötige", "wer hat", "wer verkauft",
+]
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -97,6 +110,26 @@ def send_telegram(message: str) -> bool:
 
 
 # ─────────────────────────────────────────────
+#  KEYWORD FILTER
+# ─────────────────────────────────────────────
+def is_selling(title: str) -> bool:
+    """Gibt True zurück wenn der Thread ein Ticket-Angebot ist (kein Gesuch)."""
+    t = title.lower()
+
+    # Explizite Gesuche → immer ignorieren
+    if any(kw in t for kw in BUY_KEYWORDS):
+        return False
+
+    # Verkaufs-Keywords → benachrichtigen
+    if any(kw in t for kw in SELL_KEYWORDS):
+        return True
+
+    # Kein eindeutiges Keyword → trotzdem benachrichtigen
+    # (lieber zu viel als ein Angebot verpassen)
+    return True
+
+
+# ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
 def main():
@@ -118,14 +151,20 @@ def main():
         print("  Keine neuen Threads.")
     else:
         for topic in new_topics:
+            # Bereits als gesehen markieren (unabhängig vom Filter)
+            seen.add(topic["id"])
+
+            if not is_selling(topic["title"]):
+                print(f"  ⏭ Gesuch übersprungen: {topic['title']}")
+                continue
+
             msg = (
-                f"🎪 <b>Neues Ticket-Angebot auf Fusion Forum!</b>\n\n"
+                f"🎪 <b>Ticket-Angebot auf Fusion Forum!</b>\n\n"
                 f"📌 <b>{topic['title']}</b>\n"
                 f"🔗 <a href=\"{topic['url']}\">Zum Thread</a>"
             )
             if send_telegram(msg):
                 print(f"  ✓ Benachrichtigt: {topic['title']}")
-                seen.add(topic["id"])
             else:
                 print(f"  ✗ Benachrichtigung fehlgeschlagen: {topic['title']}")
 
