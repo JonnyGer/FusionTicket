@@ -1,0 +1,44 @@
+name: Fusion Ticket Watcher
+
+on:
+  schedule:
+    # Alle 5 Minuten prüfen (GitHub kann ±5 Min abweichen)
+    - cron: '*/5 * * * *'
+  # Manueller Start jederzeit möglich
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-tickets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Dependencies installieren
+        run: pip install -r requirements.txt
+
+      - name: Forum prüfen
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python checker.py
+
+      - name: Gesehene Posts speichern (Commit)
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add seen_posts.json
+          # Nur committen wenn sich was geändert hat
+          git diff --staged --quiet || git commit -m "chore: update seen posts [skip ci]"
+          git push
